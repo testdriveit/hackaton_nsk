@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">TransportLogistik</string>
+    <string name="start_tracking">Запуск трекинга</string>
+    <string name="stop_tracking">Остановка трекинга</string>
+</resources>

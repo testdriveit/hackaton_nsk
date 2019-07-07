@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+    <link href="https://fonts.googleapis.com/css?family=Open+Sans+Condensed:300&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet/v0.7.7/leaflet.css" />
+
+    <script src="http://cdn.leafletjs.com/leaflet/v0.7.7/leaflet.js"></script>
+    <script
+                          src="https://code.jquery.com/jquery-3.4.1.min.js"
+                          integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo="
+        crossorigin="anonymous"></script>
+<style>
+
+
+#map {
+    /* min-width: 700px; /* Ширина блока */
+    width: 80%;
+    height: 550px; /* Высота блока */
+   /* margin-left: auto;
+    margin-right: auto;*/
+    float: left;
+   }
+
+h1 {
+    text-align: center;
+    font-family:'Open Sans Condensed', sans-serif;
+    margin-top: 20px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+h2 {
+  text-align: left;
+  font-family: 'Open Sans Condensed', sans-serif;;
+}
+
+#container {
+  width: 100%;
+  display:flex;
+}
+
+#loglist {
+  margin-right: 30px;
+  margin-left: 30px;
+  width: 20%;
+}
+
+#logs {
+  width: 100%;
+  height: 75%;
+  border-style: solid;
+  border-color:lightslategrey;
+  }
+
+</style>
+
+
+</head>
+<body>
+    <h1>Отслеживание транспорта онлайн</h1>
+    <div id="container">
+      <div id="map"></div>
+      <div id="loglist">
+        <h2>
+          Уведомления о нарушениях
+        </h2>
+        <textarea id="logs"></textarea>
+      </div>
+    </div>
+
+    <script type="text/javascript">
+        var prevLat = null;
+        var prevLong = null;
+        var currLat;
+        var currLong;
+
+        var prevDate = null;
+        var currDate = null;
+
+
+        var map;
+        var marker = null;
+        var marker_array = [];
+        var step = 0;
+        var polyLine;
+        var icons = null;
+        function getMap(){
+          // The first parameter are the coordinates of the center of the map
+          // The second parameter is the zoom level
+          map = L.map('map').setView([55.063063, 82.909867], 15);
+
+          // {s}, {z}, {x} and {y} are placeholders for map tiles
+          // {x} and {y} are the x/y of where you are on the map
+          // {z} is the zoom level
+          // {s} is the subdomain of cartodb
+
+          //http://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png
+
+            var layer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, &copy; <a href="http://cartodb.com/attributions">CartoDB</a>'
+          });
+
+          // Now add the layer onto the map
+          map.addLayer(layer);
+
+        }
+
+        function setMarker(id, data){
+          if (marker_array[id] == null){
+
+            marker = L.marker([data[1], data[2]]).bindPopup(id).addTo(map);
+            marker_array[id] = marker;
+            map.setView([data[1], data[2]], 15)
+          } else {
+            marker_array[id].setLatLng([data[1], data[2]]);
+          }
+        }
+
+        function getDistance(PrevLongitude, CurrLongitude, PrevLatitude, CurrLatitude){
+          deltaLambda = (PrevLongitude - CurrLongitude)*Math.PI/180;
+          deltaSigma = Math.acos(Math.sin(PrevLatitude*Math.PI/180)*Math.sin(CurrLatitude*Math.PI/180) +
+          Math.cos(PrevLatitude*Math.PI/180)*Math.cos(CurrLatitude*Math.PI/180)*Math.cos(deltaLambda));
+          return deltaSigma*6371007;
+        }
+
+        $(document).ready(function() {
+          getMap();
+        });
+
+        function updateData(){
+          $.ajax({
+            url: "http://185.135.83.140:8080/rest/v1/get"
+          }).then(function(data) {
+              var keys_array = Object.keys(data);
+
+              var i;
+
+              for (i = 0; i < keys_array.length; i++) {
+                //setMarker(keys_array[i], data[keys_array[i]][data[keys_array[i]].length - 1]);
+                setMarker(keys_array[i], data[keys_array[i]][0]);
+
+
+                //console.log(data);
+
+                currLat = data[keys_array[i]][0][1];
+                currLong = data[keys_array[i]][0][2];
+                currDate = new Date(data[keys_array[i]][0][3]);
+
+                prevLat = data[keys_array[i]][1][1];
+                prevLong = data[keys_array[i]][1][2];
+                prevDate = new Date(data[keys_array[i]][1][3]);
+
+
+
+                if (prevLat == null || prevLong == null || prevDate == null) {
+                  prevLat = currLat;
+                  prevLong = currLong;
+                  prevDate = currDate;
+                } else {
+                  var distance = getDistance(prevLong, currLong, prevLat, currLat)/1000;
+                  var deltaTime = (currDate.getTime() - prevDate.getTime())/3600000;
+                  var speed = (distance/deltaTime);
+                  if (speed > 60) {
+                    var out_string = "Внимание! Транспортное средство № " + keys_array[i] + " превысило скорость! \n";
+                    out_string += "Время нарушения: " + data[keys_array[i]][0][3] + "\n";
+                    out_string += "шир.: " + currLat + " долг.: " + currLong;
+                    /*+ currDate.getHours() + "-";
+                    out_string += currDate.getMinutes() + "-";
+                    out_string += currDate.getSeconds();*/
+                    document.getElementById('logs').innerHTML += out_string + "\n\n";
+                  }
+                }
+              }
+          });
+
+        }
+
+
+        setInterval(updateData, 3000);
+      </script>
+</body>
+</html>

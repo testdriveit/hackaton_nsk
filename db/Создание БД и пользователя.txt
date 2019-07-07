@@ -1,0 +1,4 @@
+create database tracking_db;
+CREATE USER 'tracking_master'@'localhost' IDENTIFIED BY 'kdjI97mC';
+
+GRANT ALL ON tracking_db.* TO 'tracking_master'@'localhost';
